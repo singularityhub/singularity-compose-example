@@ -16,7 +16,9 @@ From: python:3.5
     uwsgi.ini /code/uwsgi.ini
 
 %post
-    apt-get update && apt-get install -y \
+    apt-get update
+    apt-get install -y sqlite3 libsqlite3-dev
+    apt-get install -y \
         pkg-config \
         cmake \
         openssl \
@@ -33,7 +35,7 @@ From: python:3.5
     # Create hashed temporary upload locations
     mkdir -p /var/www/images/_upload/{0..9} && chmod 777 -R /var/www/images/_upload
 
-# application runs on port 3031
+# Not intended for production
 %startscript
     cd /code
-    exec /code/run_uwsgi.sh
+    /bin/bash /code/run_uwsgi.sh

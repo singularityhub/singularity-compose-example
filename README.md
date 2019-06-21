@@ -1,9 +1,15 @@
 # Singularity Compose Example
 
-**under development**
-
 This is an example of simple container orchestration with singularity-compose,
 It is based on [django-nginx-upload](https://github.com/vsoch/django-nginx-upload).
+
+**important** if you use Docker on your machine, your iptables are likely edited
+so you will have an issue running this with the latest version of Singularity.
+You can either run the [simple-example](https://www.github.com/singularityhub/singularity-example-simple), 
+or install a (not yet released)
+fixed Singularity version [from this branch](https://github.com/sylabs/singularity/pull/3771)
+to have a fully working example. If you don't use Docker, then you are a clean machine
+and no further action is required.
 
 ## Setup
 
@@ -11,7 +17,7 @@ It is based on [django-nginx-upload](https://github.com/vsoch/django-nginx-uploa
 
 For a singularity-compose project, it's expected to have a `singularity-compose.yml`
 in the present working directory. You can look at the [example](singularity-compose.yml)
-paired with the [specification](https://github.com/singularityhub/singularity-compose/tree/master/spec) 
+paired with the [specification](https://github.com/singularityhub/singularity-compose/tree/master/docs/spec) 
 to understand the fields provided. 
 
 ### Instance folders
@@ -59,6 +65,133 @@ singularity-compose-example
 └── singularity-compose.yml
 
 ```
+
+## Quick Start
+
+If you don't have it installed, install the latest [singularity-compose](https://singularityhub.github.io/singularity-compose/#/)
+
+```bash
+$ pip install singularity-compose
+```
+
+The quickest way to start is to first build your containers (you will be asked for sudo):
+
+```bash
+$ singularity-compose build
+```
+
+and then bring it up!
+
+```bash
+$ singularity-compose up
+```
+
+Verify it's running:
+
+```bash
+$ singularity-compose ps
+INSTANCES  NAME PID     IMAGE
+1           app	10238	app.sif
+2         nginx	10432	nginx.sif
+```
+
+And then look at logs, 
+
+```bash
+$ singularity-compose logs app
+$ singularity-compose logs app --tail 30
+$ singularity-compose logs nginx
+```
+
+shell inside,
+
+```bash
+$ singularity-compose shell app
+$ singularity-compose shell nginx
+```
+
+or execute a command!
+
+```bash
+$ singularity-compose exec app uname -a
+$ singularity-compose exec nginx echo "Hello!"
+```
+
+When you open your browser to [http://127.0.0.1](http://127.0.0.1)
+you should see the upload interface. 
+
+![img/upload.png](img/upload.png)
+
+If you drop a file in the box (or click
+to select) we will use the nginx-upload module to send it directly to the
+server. Cool!
+
+![img/content.png](img/content.png)
+
+This is just a simple Django application, the database is sqlite3, in the
+app folder:
+
+```bash
+$ ls app/
+app.sif  db.sqlite3  manage.py  nginx  requirements.txt  run_uwsgi.sh  Singularity  upload  uwsgi.ini
+```
+
+The images are stored in [images](images):
+
+```bash
+$ ls images/
+2018-02-20-172617.jpg  40-acos.png  _upload 
+```
+
+And static files are in [static](static).
+
+```bash
+$ ls static/
+admin  css  js
+```
+
+If you look at the [singularity-compose.yml](singularity-compose.yml), we bind these
+folders to locations in the container where the web server needs write. This is likely
+a prime different between Singularity and Docker compose - Docker doesn't need
+binds for write, but rather to reduce isolation. Continue below to 
+read about networking, and see these commands in detail.
+
+## Networking
+
+When you bring the container up, you'll see generation of an `etc.hosts` file,
+and if you guessed it, this is indeed bound to `/etc/hosts` in the container.
+Let's take a look:
+
+```bash
+10.22.0.3	app
+10.22.0.2	nginx
+127.0.0.1	localhost
+
+# The following lines are desirable for IPv6 capable hosts
+::1     ip6-localhost ip6-loopback
+fe00::0 ip6-localnet
+ff00::0 ip6-mcastprefix
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+```
+
+This file will give each container that you create (in our case, nginx and app)
+a name on its local network. Singularity by default creates a bridge for
+instance containers, which you can conceptually think of as a router,
+This means that, if I were to reference the hostname "app" in a second container,
+it would resolve to `10.22.0.3`. Singularity compose does this by generating
+these addresses before creating the instances, and then assigning them to it.
+If you would like to see the full commands that are generated, run the up
+with `--debug` (binds and full paths have been removed to make this easier to read).
+
+```bash
+$ singularity instance start \
+    --bind /home/vanessa/Documents/Dropbox/Code/singularity/singularity-compose-simple/etc.hosts:/etc/hosts \
+    --net --network-args "portmap=80:80/tcp" --network-args "IP=10.22.0.2" \
+    --hostname app \
+    --writable-tmpfs app.sif app
+```
+
 
 ## Commands
 
@@ -171,17 +304,13 @@ $ singularity-compose down nginx
 You can of course view logs for all instances, or just specific named ones:
 
 ```bash
-$ singularity-compose logs --tail 10
-nginx ERR
-nginx: [emerg] host not found in upstream "uwsgi" in /etc/nginx/conf.d/default.conf:22
-2019/06/18 15:41:35 [emerg] 15#15: host not found in upstream "uwsgi" in /etc/nginx/conf.d/default.conf:22
-nginx: [emerg] host not found in upstream "uwsgi" in /etc/nginx/conf.d/default.conf:22
-2019/06/18 16:04:42 [emerg] 15#15: host not found in upstream "uwsgi" in /etc/nginx/conf.d/default.conf:22
-nginx: [emerg] host not found in upstream "uwsgi" in /etc/nginx/conf.d/default.conf:22
-2019/06/18 16:50:03 [emerg] 15#15: host not found in upstream "uwsgi" in /etc/nginx/conf.d/default.conf:22
-nginx: [emerg] host not found in upstream "uwsgi" in /etc/nginx/conf.d/default.conf:22
-2019/06/18 16:51:32 [emerg] 15#15: host not found in upstream "uwsgi" in /etc/nginx/conf.d/default.conf:22
-nginx: [emerg] host not found in upstream "uwsgi" in /etc/nginx/conf.d/default.conf:22
+$ singularity-compose logs
+Fri Jun 21 10:24:40 2019 - WSGI app 0 (mountpoint='') ready in 1 seconds on interpreter 0x55daf463f920 pid: 27 (default app)
+Fri Jun 21 10:24:40 2019 - uWSGI running as root, you can use --uid/--gid/--chroot options
+Fri Jun 21 10:24:40 2019 - *** WARNING: you are running uWSGI as root !!! (use the --uid flag) *** 
+Fri Jun 21 10:24:40 2019 - *** uWSGI is running in multiple interpreter mode ***
+Fri Jun 21 10:24:40 2019 - spawned uWSGI master process (pid: 27)
+Fri Jun 21 10:24:40 2019 - spawned uWSGI worker 1 (pid: 29, cores: 1)
 ``
 
 ### Config
